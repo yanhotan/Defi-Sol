@@ -1,0 +1,71 @@
+version: '3.8'
+
+services:
+  # Solana smart contracts development environment
+  smart-contracts:
+    build:
+      context: ./smart-contracts
+      dockerfile: Dockerfile
+    container_name: sol-stake-lend-contracts
+    volumes:
+      - ./smart-contracts:/app
+      - solana-config:/root/.config/solana
+      - cargo-cache:/usr/local/cargo/registry
+    environment:
+      - RUST_LOG=solana_runtime::system_instruction_processor=trace,solana_runtime::message_processor=trace,solana_bpf_loader=debug,solana_rbpf=debug
+      - RUST_BACKTRACE=1
+      - SOLANA_CLUSTER=localnet
+    ports:
+      - "8899:8899" # Solana RPC
+      - "8900:8900" # Solana Websocket
+    command: >
+      bash -c "
+        echo 'Solana Stake-to-Lend Smart Contract Environment' &&
+        echo '===========================================' &&
+        echo 'Available commands:' &&
+        echo '- ./scripts/deploy.sh : Deploy smart contracts' &&
+        echo '- ./scripts/test.sh : Run tests' &&
+        echo '===========================================' &&
+        sleep infinity
+      "
+  
+  # Backend service for API and transaction processing
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: sol-stake-lend-backend
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=development
+      - PORT=3001
+      - SOLANA_RPC_URL=http://smart-contracts:8899
+    depends_on:
+      - smart-contracts
+  
+  # Frontend application
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: sol-stake-lend-frontend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "3000:3000"
+    environment:
+      - REACT_APP_BACKEND_URL=http://localhost:3001
+      - REACT_APP_SOLANA_RPC_URL=http://localhost:8899
+    depends_on:
+      - backend
+
+volumes:
+  solana-config:
+    # Persistent storage for Solana configuration (keypairs, etc)
+  cargo-cache:
+    # Cache Rust dependencies between container rebuilds

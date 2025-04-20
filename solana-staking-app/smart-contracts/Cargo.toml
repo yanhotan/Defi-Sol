@@ -1,0 +1,68 @@
+// smart-contracts/Cargo.toml
+[package]
+name = "sol-stake-lend"
+version = "0.1.0"
+edition = "2021"
+description = "Solana Stake-to-Lend protocol enabling staking, lending and borrowing with different risk pools"
+license = "MIT"
+repository = "https://github.com/user/sol-stake-lend"
+authors = ["Your Name <your.email@example.com>"]
+readme = "README.md"
+keywords = ["solana", "defi", "staking", "lending", "blockchain"]
+
+[features]
+no-entrypoint = []
+test-bpf = []
+# Feature for production builds with additional optimizations
+production = ["solana-program/production"]
+
+[dependencies]
+solana-program = "1.17.2"
+borsh = "0.10.3"
+thiserror = "1.0.50"
+spl-token = { version = "4.0.0", features = ["no-entrypoint"] }
+spl-associated-token-account = { version = "2.0", features = ["no-entrypoint"] }
+num-derive = "0.4.0"
+num-traits = "0.2.15"
+arrayref = "0.3.7"
+bytemuck = { version = "1.14.0", features = ["derive"] }
+
+# Added for handling fixed-point decimal calculations (useful for interest rates)
+uint = { version = "0.9.5", default-features = false }
+
+# Added for better support for lock pool time-based operations
+chrono = { version = "0.4.31", default-features = false, features = ["alloc"] }
+
+# Added for serialization in tests
+serde = { version = "1.0.189", features = ["derive"] }
+serde_json = "1.0.107"
+
+[dev-dependencies]
+solana-program-test = "1.17.2"
+solana-sdk = "1.17.2"
+tokio = { version = "1.28.2", features = ["full"] }
+
+# Added for property-based testing
+proptest = "1.2.0"
+
+# Added for easier test assertions
+assert_matches = "1.5.0"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+
+# Optimize for size in release builds
+[profile.release]
+opt-level = "z"
+overflow-checks = true
+debug = false
+strip = true
+lto = true
+codegen-units = 1
+panic = "abort"
+
+# Development profile with some optimizations
+[profile.dev]
+opt-level = 1
+debug = true
+panic = "unwind"
