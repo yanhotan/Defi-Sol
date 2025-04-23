@@ -40,12 +40,12 @@ describe('vault-sol', () => {
     vaultBump = bump;
 
     // Find the rewards pool PDA
-    const [rewardsPDAAddress, rewardsBump] = await PublicKey.findProgramAddress(
+    const [rewardsPDAAddress, rewardsBumpValue] = await PublicKey.findProgramAddress(
       [Buffer.from("rewards_pool")],
       program.programId
     );
     rewardsPDA = rewardsPDAAddress;
-    rewardsBump = rewardsBump;
+    rewardsBump = rewardsBumpValue;
   });
 
   it('Initializes the vault', async () => {

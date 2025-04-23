@@ -1,51 +1,79 @@
-version: '3'
+name: solana-staking-app
 
 services:
   solana-validator:
     image: solanalabs/solana:stable
+    container_name: solana-validator
     ports:
       - "8899:8899"
       - "8900:8900"
       - "9900:9900"
     volumes:
-      - ./ledger:/root/ledger
-    command: solana-test-validator --rpc-port 8899 --ledger /root/ledger
+      - solana-ledger:/root/ledger
+      - solana-config:/root/.config/solana
+      - ./target/deploy:/app/deploy
+    command: >
+      bash -c "
+        solana config set --url http://127.0.0.1:8899 &&
+        solana-test-validator 
+          --bpf-program VauLt5oL1111111111111111111111111111111111 /app/deploy/vault_sol.so
+          --bpf-program LoCK111111111111111111111111111111111111111 /app/deploy/locking_vault.so
+          --bpf-program StbL111111111111111111111111111111111111111 /app/deploy/stablecoin_vault.so
+          --bpf-program DuaL111111111111111111111111111111111111111 /app/deploy/dual_product.so
+          --rpc-port 8899
+          --ledger /root/ledger
+          --reset"
     environment:
-      - RUST_LOG=solana=info
+      - RUST_LOG=solana_runtime::system_instruction_processor=trace,solana_runtime::message_processor=debug,solana_bpf_loader=debug,solana_rbpf=debug
 
-  anchor-build:
-    image: solanalabs/solana:stable
+  program-builder:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: program-builder
     volumes:
-      - .:/app
-    working_dir: /app
+      - .:/workspace
+      - cargo-cache:/usr/local/cargo/registry
+      - target-cache:/workspace/target
+    working_dir: /workspace
+    environment:
+      - RUST_LOG=info
+      - RUST_BACKTRACE=1
+      - SOLANA_CLUSTER=localnet
     command: >
       bash -c "
-        apt-get update && apt-get install -y git && 
-        curl -sL https://deb.nodesource.com/setup_18.x | bash - && 
-        apt-get install -y nodejs && 
-        npm install -g @coral-xyz/anchor-cli && 
-        anchor build
-      "
-    depends_on:
-      - solana-validator
+        echo 'Building all Solana programs...' &&
+        cargo build-sbf --manifest-path programs/vault-sol/Cargo.toml --release &&
+        cargo build-sbf --manifest-path programs/locking-vault/Cargo.toml --release &&
+        cargo build-sbf --manifest-path programs/stablecoin-vault/Cargo.toml --release &&
+        cargo build-sbf --manifest-path programs/dual-product/Cargo.toml --release &&
+        echo 'Build complete!'"
 
-  anchor-client:
-    image: solanalabs/solana:stable
+  test-runner:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    container_name: test-runner
     volumes:
-      - .:/app
-    working_dir: /app
-    command: >
-      bash -c "
-        apt-get update && apt-get install -y git && 
-        curl -sL https://deb.nodesource.com/setup_18.x | bash - && 
-        apt-get install -y nodejs && 
-        npm install -g @coral-xyz/anchor-cli && 
-        tail -f /dev/null
-      "
+      - .:/workspace
+      - cargo-cache:/usr/local/cargo/registry
+      - target-cache:/workspace/target
+    working_dir: /workspace
     environment:
       - ANCHOR_PROVIDER_URL=http://solana-validator:8899
-      - ANCHOR_WALLET=/app/.anchor/wallet/wallet.json
+      - ANCHOR_WALLET=/workspace/.anchor/wallet/wallet.json
+    depends_on:
+      - solana-validator
+      - program-builder
+    command: >
+      bash -c "
+        echo 'Waiting for validator to start...' &&
+        sleep 5 &&
+        echo 'Running tests...' &&
+        yarn test"
 
-networks:
-  default:
-    driver: bridge
+volumes:
+  solana-ledger:
+  solana-config:
+  cargo-cache:
+  target-cache:
