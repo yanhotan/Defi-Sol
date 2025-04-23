@@ -1,96 +1,51 @@
-version: '3.8'
+version: '3'
 
 services:
-  # Solana smart contracts development environment
-  smart-contracts:
-    build:
-      context: ./smart-contracts
-      dockerfile: Dockerfile
-    container_name: sol-stake-lend-contracts
-    volumes:
-      - ./smart-contracts:/app
-      - solana-config:/root/.config/solana
-      - cargo-cache:/usr/local/cargo/registry
-    environment:
-      - RUST_LOG=solana_runtime::system_instruction_processor=trace,solana_runtime::message_processor=trace,solana_bpf_loader=debug,solana_rbpf=debug
-      - RUST_BACKTRACE=1
-      - SOLANA_CLUSTER=localnet
+  solana-validator:
+    image: solanalabs/solana:stable
     ports:
-      - "8899:8899" # Solana RPC
-      - "8900:8900" # Solana Websocket
+      - "8899:8899"
+      - "8900:8900"
+      - "9900:9900"
+    volumes:
+      - ./ledger:/root/ledger
+    command: solana-test-validator --rpc-port 8899 --ledger /root/ledger
+    environment:
+      - RUST_LOG=solana=info
+
+  anchor-build:
+    image: solanalabs/solana:stable
+    volumes:
+      - .:/app
+    working_dir: /app
     command: >
       bash -c "
-        echo 'Solana Stake-to-Lend Smart Contract Environment' &&
-        echo '===========================================' &&
-        echo 'Available commands:' &&
-        echo '- ./scripts/deploy.sh : Deploy smart contracts' &&
-        echo '- ./scripts/test.sh : Run tests' &&
-        echo '===========================================' &&
-        sleep infinity
+        apt-get update && apt-get install -y git && 
+        curl -sL https://deb.nodesource.com/setup_18.x | bash - && 
+        apt-get install -y nodejs && 
+        npm install -g @coral-xyz/anchor-cli && 
+        anchor build
       "
-  
-  # Backend service for API and transaction processing
-  backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    container_name: backend
-    restart: always
-    ports:
-      - "5000:5000"
-    environment:
-      - PORT=5000
-      - MONGO_HOST=mongodb
-      - MONGO_PORT=27017
-      - MONGO_DB=solana-staking
-      - MONGO_USER=admin
-      - MONGO_PASSWORD=password
-      - JWT_SECRET=your_secure_jwt_secret_key_here
-      - NODE_ENV=development
     depends_on:
-      - mongodb
-    networks:
-      - app-network
-  
-  # Frontend application
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    container_name: frontend
-    restart: always
-    ports:
-      - "3000:3000"
-    environment:
-      - REACT_APP_BACKEND_URL=http://localhost:3001
-      - REACT_APP_SOLANA_RPC_URL=http://localhost:8899
-    depends_on:
-      - backend
-    networks:
-      - app-network
+      - solana-validator
 
-  mongodb:
-    image: mongo:latest
-    container_name: mongodb
-    restart: always
-    environment:
-      - MONGO_INITDB_ROOT_USERNAME=admin
-      - MONGO_INITDB_ROOT_PASSWORD=password
-    ports:
-      - "27017:27017"
+  anchor-client:
+    image: solanalabs/solana:stable
     volumes:
-      - mongodb_data:/data/db
-    networks:
-      - app-network
-
-volumes:
-  solana-config:
-    # Persistent storage for Solana configuration (keypairs, etc)
-  cargo-cache:
-    # Cache Rust dependencies between container rebuilds
-  mongodb_data:
-    driver: local
+      - .:/app
+    working_dir: /app
+    command: >
+      bash -c "
+        apt-get update && apt-get install -y git && 
+        curl -sL https://deb.nodesource.com/setup_18.x | bash - && 
+        apt-get install -y nodejs && 
+        npm install -g @coral-xyz/anchor-cli && 
+        tail -f /dev/null
+      "
+    environment:
+      - ANCHOR_PROVIDER_URL=http://solana-validator:8899
+      - ANCHOR_WALLET=/app/.anchor/wallet/wallet.json
 
 networks:
-  app-network:
+  default:
     driver: bridge
