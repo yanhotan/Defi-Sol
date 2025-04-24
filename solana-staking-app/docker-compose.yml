@@ -1,4 +1,4 @@
-name: solana-staking-app
+version: '3'
 
 services:
   solana-validator:
@@ -9,22 +9,27 @@ services:
       - "8900:8900"
       - "9900:9900"
     volumes:
-      - solana-ledger:/root/ledger
-      - solana-config:/root/.config/solana
       - ./target/deploy:/app/deploy
+      - ./test-ledger:/test-ledger
     command: >
       bash -c "
-        solana config set --url http://127.0.0.1:8899 &&
+        apt-get update && apt-get install -y curl netcat &&
+        echo 'Starting validator...' &&
         solana-test-validator 
-          --bpf-program VauLt5oL1111111111111111111111111111111111 /app/deploy/vault_sol.so
-          --bpf-program LoCK111111111111111111111111111111111111111 /app/deploy/locking_vault.so
-          --bpf-program StbL111111111111111111111111111111111111111 /app/deploy/stablecoin_vault.so
-          --bpf-program DuaL111111111111111111111111111111111111111 /app/deploy/dual_product.so
+          --ledger /test-ledger
+          --bind-address 0.0.0.0
           --rpc-port 8899
-          --ledger /root/ledger
-          --reset"
-    environment:
-      - RUST_LOG=solana_runtime::system_instruction_processor=trace,solana_runtime::message_processor=debug,solana_bpf_loader=debug,solana_rbpf=debug
+          --rpc-bind-address 0.0.0.0
+          --reset
+          --slots-per-epoch 32
+          --tick-per-slot 8
+          --no-bpf-jit"
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8899", "-X", "POST", "-H", "Content-Type: application/json", "-d", "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"getHealth\"}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
 
   program-builder:
     build:
@@ -36,18 +41,33 @@ services:
       - cargo-cache:/usr/local/cargo/registry
       - target-cache:/workspace/target
     working_dir: /workspace
-    environment:
-      - RUST_LOG=info
-      - RUST_BACKTRACE=1
-      - SOLANA_CLUSTER=localnet
     command: >
       bash -c "
+        apt-get update && apt-get install -y curl &&
+        echo 'Waiting for Solana validator...' &&
+        while ! curl -sf http://solana-validator:8899 -X POST -H 'Content-Type: application/json' -d '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"getHealth\"}'; do
+          echo 'Validator not ready - sleeping 5s...'
+          sleep 5
+        done &&
+        echo 'Validator is ready!' &&
+        solana config set --url http://solana-validator:8899 &&
         echo 'Building all Solana programs...' &&
-        cargo build-sbf --manifest-path programs/vault-sol/Cargo.toml --release &&
-        cargo build-sbf --manifest-path programs/locking-vault/Cargo.toml --release &&
-        cargo build-sbf --manifest-path programs/stablecoin-vault/Cargo.toml --release &&
-        cargo build-sbf --manifest-path programs/dual-product/Cargo.toml --release &&
+        mkdir -p target/deploy &&
+        cargo build-sbf --manifest-path=programs/vault-sol/Cargo.toml &&
+        cargo build-sbf --manifest-path=programs/locking-vault/Cargo.toml &&
+        cargo build-sbf --manifest-path=programs/stablecoin-vault/Cargo.toml &&
+        cargo build-sbf --manifest-path=programs/dual-product/Cargo.toml &&
+        cp target/sbf-solana-solana/release/*.so target/deploy/ &&
+        touch /workspace/.build-complete &&
         echo 'Build complete!'"
+    depends_on:
+      solana-validator:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "test", "-f", "/workspace/.build-complete"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   test-runner:
     build:
@@ -62,18 +82,19 @@ services:
     environment:
       - ANCHOR_PROVIDER_URL=http://solana-validator:8899
       - ANCHOR_WALLET=/workspace/.anchor/wallet/wallet.json
-    depends_on:
-      - solana-validator
-      - program-builder
     command: >
       bash -c "
-        echo 'Waiting for validator to start...' &&
-        sleep 5 &&
+        echo 'Waiting for program builds to complete...' &&
+        until [ -f /workspace/.build-complete ]; do
+          echo 'Waiting for program builds...'
+          sleep 2
+        done &&
         echo 'Running tests...' &&
-        yarn test"
+        anchor test --skip-local-validator"
+    depends_on:
+      program-builder:
+        condition: service_healthy
 
 volumes:
-  solana-ledger:
-  solana-config:
   cargo-cache:
   target-cache:
