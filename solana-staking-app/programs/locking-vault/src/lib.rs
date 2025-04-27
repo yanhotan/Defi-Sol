@@ -1,5 +1,5 @@
 use anchor_lang::prelude::*;
-use anchor_spl::token::{Token, TokenAccount};
+use anchor_spl::token::Token;
 
 pub mod errors;
 pub mod state;

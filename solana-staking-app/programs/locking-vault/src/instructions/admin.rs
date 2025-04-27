@@ -46,13 +46,21 @@ pub struct UpdateLockPeriods<'info> {
 pub struct UpdateBaseAPY<'info> {
     #[account(
         mut,
-        has_one = authority,
         seeds = [b"lock_pool_state"],
         bump = pool_state.bump,
     )]
     pub pool_state: Account<'info, LockPoolState>,
     
+    // We'll need to check authorization manually in the handler
     pub authority: Signer<'info>,
+    
+    // We need to add the config account to validate the authority
+    #[account(
+        has_one = authority,
+        seeds = [b"locking_vault_config"],
+        bump
+    )]
+    pub config: Account<'info, LockingVaultConfig>,
 }
 
 #[derive(Accounts)]

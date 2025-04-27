@@ -40,4 +40,7 @@ pub enum LockingVaultError {
 
     #[msg("Position already unlocked")]
     PositionUnlocked,
+    
+    #[msg("Insufficient balance for operation")]
+    InsufficientBalance,
 }
