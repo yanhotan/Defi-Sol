@@ -2,7 +2,7 @@
 seeds = false
 skip-lint = false
 
-[programs]
+[programs.localnet]
 vault_sol = "11111111111111111111111111111111"
 locking_vault = "11111111111111111111111111111111"
 stablecoin_vault = "11111111111111111111111111111111"

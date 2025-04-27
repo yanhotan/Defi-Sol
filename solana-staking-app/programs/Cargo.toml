@@ -8,10 +8,10 @@ members = [
 ]
 
 [workspace.dependencies]
-anchor-lang = "0.31.1"
-anchor-spl = "0.31.1"
-solana-program = "=2.2.1"
-solana-address-lookup-table-interface = "=2.2.1"
+anchor-lang = "=0.26.0"
+anchor-spl = "=0.26.0"
+solana-program = "=1.14.17"
+solana-address-lookup-table-interface = "=1.14.17"
 
 [profile.release]
 overflow-checks = true

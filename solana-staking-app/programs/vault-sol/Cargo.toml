@@ -19,7 +19,8 @@ default = []
 anchor-lang = { workspace = true }
 anchor-spl = { workspace = true }
 solana-program = { workspace = true }
-marinade-cpi = "=0.2.2"
+# Temporarily commented out to avoid dependency conflicts
+# marinade-cpi = "=0.1.0" 
 num-traits = "0.2"
 num-derive = "0.3"
 

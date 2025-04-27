@@ -1,8 +1,6 @@
-version: '3'
-
 services:
   solana-validator:
-    image: solanalabs/solana:stable
+    image: solanalabs/solana:v1.14.17
     container_name: solana-validator
     ports:
       - "8899:8899"
@@ -15,6 +13,7 @@ services:
       bash -c "
         apt-get update && apt-get install -y curl netcat &&
         echo 'Starting validator...' &&
+        mkdir -p /test-ledger &&
         solana-test-validator 
           --ledger /test-ledger
           --bind-address 0.0.0.0
@@ -23,13 +22,13 @@ services:
           --reset
           --slots-per-epoch 32
           --tick-per-slot 8
-          --no-bpf-jit"
+          --quiet"
     healthcheck:
-      test: ["CMD", "curl", "-sf", "http://localhost:8899", "-X", "POST", "-H", "Content-Type: application/json", "-d", "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"getHealth\"}"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-      start_period: 30s
+      test: ["CMD", "bash", "-c", "curl -s http://localhost:8899 -X POST -H 'Content-Type: application/json' -d '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"getHealth\"}' | grep -q 'ok'"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 60s
 
   program-builder:
     build:
@@ -51,23 +50,33 @@ services:
         done &&
         echo 'Validator is ready!' &&
         solana config set --url http://solana-validator:8899 &&
-        echo 'Building all Solana programs...' &&
+        solana-keygen new --no-bip39-passphrase -o /root/.config/solana/id.json &&
+        echo 'Setting up project dependencies...' &&
+        cd /workspace &&
+        echo 'Building individual programs...' &&
         mkdir -p target/deploy &&
-        cargo build-sbf --manifest-path=programs/vault-sol/Cargo.toml &&
-        cargo build-sbf --manifest-path=programs/locking-vault/Cargo.toml &&
-        cargo build-sbf --manifest-path=programs/stablecoin-vault/Cargo.toml &&
-        cargo build-sbf --manifest-path=programs/dual-product/Cargo.toml &&
-        cp target/sbf-solana-solana/release/*.so target/deploy/ &&
+        cd programs/locking-vault &&
+        cargo build-bpf --bpf-out-dir /workspace/target/deploy &&
+        cd ../stablecoin-vault &&
+        cargo build-bpf --bpf-out-dir /workspace/target/deploy &&
+        cd ../dual-product &&
+        cargo build-bpf --bpf-out-dir /workspace/target/deploy &&
+        cd ../vault-sol &&
+        cargo build-bpf --bpf-out-dir /workspace/target/deploy &&
+        cd /workspace &&
+        echo 'Build complete!' &&
         touch /workspace/.build-complete &&
-        echo 'Build complete!'"
+        # Keep the container running
+        tail -f /dev/null"
     depends_on:
       solana-validator:
-        condition: service_healthy
+        condition: service_started
     healthcheck:
       test: ["CMD", "test", "-f", "/workspace/.build-complete"]
       interval: 5s
       timeout: 5s
       retries: 10
+      start_period: 60s
 
   test-runner:
     build:
@@ -92,8 +101,7 @@ services:
         echo 'Running tests...' &&
         anchor test --skip-local-validator"
     depends_on:
-      program-builder:
-        condition: service_healthy
+      - program-builder
 
 volumes:
   cargo-cache:

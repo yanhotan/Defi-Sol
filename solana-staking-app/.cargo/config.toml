@@ -1,0 +1,13 @@
+[build]
+# Override the default compiler (rustc) for all targets
+rustc = "rustc"
+
+[target.bpfel-unknown-unknown]
+linker = "lld"
+
+[net]
+git-fetch-with-cli = true
+
+# Use stable versions for Solana dependencies
+[env]
+SOLANA_VERSION = "1.16.15"
