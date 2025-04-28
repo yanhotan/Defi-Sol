@@ -56,32 +56,29 @@ pub fn claim_stable_rewards(
     
     require!(time_staked > 0, StablecoinVaultError::InvalidAmount);
 
-    match source {
+    // Calculate rewards based on source
+    let reward_amount = match source {
         YieldSource::Lending => {
             require!(config.lending_enabled, StablecoinVaultError::LendingDisabled);
             
             // Calculate lending rewards based on share of pool
-            let rewards = calculate_lending_rewards(
+            calculate_lending_rewards(
                 user_position.shares,
                 time_staked,
                 pool_state,
-            )?;
-
-            transfer_rewards(ctx, rewards)?;
+            )?
         },
         YieldSource::Treasury => {
             // Calculate treasury rewards based on fixed APY
-            let rewards = calculate_treasury_rewards(
+            calculate_treasury_rewards(
                 user_position.stablecoin_amount,
                 time_staked,
                 pool_state.apy_points,
-            )?;
-
-            transfer_rewards(ctx, rewards)?;
+            )?
         },
         YieldSource::Both => {
             if config.lending_enabled {
-                // Calculate and transfer both types of rewards
+                // Calculate both types of rewards
                 let lending_rewards = calculate_lending_rewards(
                     user_position.shares,
                     time_staked,
@@ -94,23 +91,46 @@ pub fn claim_stable_rewards(
                     pool_state.apy_points,
                 )?;
 
-                let total_rewards = lending_rewards
+                lending_rewards
                     .checked_add(treasury_rewards)
-                    .ok_or(StablecoinVaultError::MathOverflow)?;
-
-                transfer_rewards(ctx, total_rewards)?;
+                    .ok_or(StablecoinVaultError::MathOverflow)?
             } else {
-                // Only transfer treasury rewards if lending is disabled
-                let rewards = calculate_treasury_rewards(
+                // Only treasury rewards if lending is disabled
+                calculate_treasury_rewards(
                     user_position.stablecoin_amount,
                     time_staked,
                     pool_state.apy_points,
-                )?;
-
-                transfer_rewards(ctx, rewards)?;
+                )?
             }
         }
-    }
+    };
+
+    // Transfer rewards directly here
+    require!(reward_amount > 0, StablecoinVaultError::InvalidAmount);
+
+    // Calculate platform fee
+    let fee_amount = (reward_amount as u128)
+        .checked_mul(config.platform_fee_bps as u128)
+        .ok_or(StablecoinVaultError::MathOverflow)?
+        .checked_div(10000)
+        .ok_or(StablecoinVaultError::MathOverflow)? as u64;
+
+    let user_reward = reward_amount
+        .checked_sub(fee_amount)
+        .ok_or(StablecoinVaultError::MathOverflow)?;
+
+    // Transfer rewards to user
+    anchor_spl::token::transfer(
+        CpiContext::new(
+            ctx.accounts.token_program.to_account_info(),
+            Transfer {
+                from: ctx.accounts.vault_usdc_account.to_account_info(),
+                to: ctx.accounts.user_usdc_account.to_account_info(),
+                authority: ctx.accounts.config.to_account_info(),
+            },
+        ),
+        user_reward,
+    )?;
 
     // Update last claim timestamp
     user_position.last_reward_claim = current_time;
@@ -152,40 +172,4 @@ fn calculate_treasury_rewards(
         .ok_or(StablecoinVaultError::MathOverflow)? as u64;
 
     Ok(rewards)
-}
-
-// Helper function to transfer rewards
-fn transfer_rewards(
-    ctx: Context<ClaimStableRewards>,
-    reward_amount: u64,
-) -> Result<()> {
-    require!(reward_amount > 0, StablecoinVaultError::InvalidAmount);
-
-    let config = &ctx.accounts.config;
-
-    // Calculate platform fee
-    let fee_amount = (reward_amount as u128)
-        .checked_mul(config.platform_fee_bps as u128)
-        .ok_or(StablecoinVaultError::MathOverflow)?
-        .checked_div(10000)
-        .ok_or(StablecoinVaultError::MathOverflow)? as u64;
-
-    let user_reward = reward_amount
-        .checked_sub(fee_amount)
-        .ok_or(StablecoinVaultError::MathOverflow)?;
-
-    // Transfer rewards to user
-    anchor_spl::token::transfer(
-        CpiContext::new(
-            ctx.accounts.token_program.to_account_info(),
-            Transfer {
-                from: ctx.accounts.vault_usdc_account.to_account_info(),
-                to: ctx.accounts.user_usdc_account.to_account_info(),
-                authority: config.to_account_info(),
-            },
-        ),
-        user_reward,
-    )?;
-
-    Ok(())
 }

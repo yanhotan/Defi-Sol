@@ -26,6 +26,9 @@ pub enum DualProductError {
     #[msg("Vault is paused")]
     VaultPaused,
 
+    #[msg("Product is paused")]
+    ProductPaused,
+
     #[msg("Lock period not expired")]
     LockPeriodNotExpired,
 
@@ -46,4 +49,7 @@ pub enum DualProductError {
 
     #[msg("Position not in LP")]
     PositionNotInLP,
+    
+    #[msg("Invalid token ratio configuration")]
+    InvalidRatios,
 }

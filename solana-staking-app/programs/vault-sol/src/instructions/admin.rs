@@ -1,5 +1,5 @@
 use anchor_lang::prelude::*;
-use crate::state::{VaultConfig, RewardsPool};
+use crate::state::{VaultConfig, RewardsPool, LSTProvider};
 use crate::errors::VaultSolError;
 
 #[derive(Accounts)]
@@ -33,11 +33,18 @@ pub struct InitializeVault<'info> {
 pub struct UpdateAPY<'info> {
     #[account(
         mut,
-        has_one = authority,
         seeds = [b"rewards_pool"],
         bump = rewards_pool.bump,
     )]
     pub rewards_pool: Account<'info, RewardsPool>,
+    
+    // We need to check the authority against the config, since RewardsPool doesn't have authority field
+    #[account(
+        seeds = [b"vault_sol_config"],
+        bump,
+        constraint = config.authority == authority.key()
+    )]
+    pub config: Account<'info, VaultConfig>,
     
     pub authority: Signer<'info>,
 }
@@ -72,7 +79,7 @@ pub struct PauseVault<'info> {
         bump = config.bump,
     )]
     pub config: Account<'info, VaultConfig>,
-    
+
     pub authority: Signer<'info>,
 }
 
@@ -85,7 +92,7 @@ pub struct UnpauseVault<'info> {
         bump = config.bump,
     )]
     pub config: Account<'info, VaultConfig>,
-    
+
     pub authority: Signer<'info>,
 }
 
@@ -158,16 +165,17 @@ pub fn add_rewards(
         VaultSolError::InsufficientBalance
     );
 
-    **ctx.accounts.authority.try_borrow_mut_lamports()? = ctx
-        .accounts
-        .authority
+    // Get account info to manipulate lamports
+    let authority_info = ctx.accounts.authority.to_account_info();
+    let rewards_pool_info = ctx.accounts.rewards_pool.to_account_info();
+
+    // Transfer lamports from authority to rewards pool
+    **authority_info.try_borrow_mut_lamports()? = authority_info
         .lamports()
         .checked_sub(amount)
         .ok_or(VaultSolError::MathOverflow)?;
 
-    **ctx.accounts.rewards_pool.try_borrow_mut_lamports()? = ctx
-        .accounts
-        .rewards_pool
+    **rewards_pool_info.try_borrow_mut_lamports()? = rewards_pool_info
         .lamports()
         .checked_add(amount)
         .ok_or(VaultSolError::MathOverflow)?;

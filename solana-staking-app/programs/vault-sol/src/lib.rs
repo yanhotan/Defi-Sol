@@ -6,7 +6,7 @@ pub mod instructions;
 
 use instructions::*;
 
-declare_id!("VauLt5oL1111111111111111111111111111111111");
+declare_id!("VauLt5oL11111111111111111111111111111111111");
 
 #[program]
 pub mod vault_sol {

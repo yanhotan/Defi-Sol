@@ -1,5 +1,4 @@
 use anchor_lang::prelude::*;
-use anchor_spl::token::{Token, TokenAccount};
 
 pub mod errors;
 pub mod state;
@@ -23,14 +22,21 @@ pub mod dual_product {
     ) -> Result<()> {
         instructions::admin::initialize_product(ctx, platform_fee_bps, min_deposit, lst_ratio, usdc_ratio)
     }
-
-    pub fn deposit_dual(
-        ctx: Context<DepositDual>,
-        lst_amount: u64,
+    
+    pub fn create_dual_position(
+        ctx: Context<CreateDualPosition>,
+        wsol_amount: u64,
         usdc_amount: u64,
-        add_to_lp: bool,
     ) -> Result<()> {
-        instructions::deposits::deposit_dual(ctx, lst_amount, usdc_amount, add_to_lp)
+        instructions::deposits::create_dual_position(ctx, wsol_amount, usdc_amount)
+    }
+    
+    pub fn add_to_position(
+        ctx: Context<AddToPosition>,
+        wsol_amount: u64,
+        usdc_amount: u64,
+    ) -> Result<()> {
+        instructions::deposits::add_to_position(ctx, wsol_amount, usdc_amount)
     }
 
     pub fn withdraw_dual(

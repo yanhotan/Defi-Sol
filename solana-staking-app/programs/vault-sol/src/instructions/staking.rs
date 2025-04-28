@@ -1,13 +1,13 @@
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::{program::invoke, system_instruction};
 use anchor_spl::token::{Mint, Token, TokenAccount};
-use crate::state::{VaultConfig, UserPosition, LSTProvider, StakePosition, RewardsPool};
+use crate::state::{VaultConfig, UserPosition, StakePosition};
 use crate::errors::VaultSolError;
 
 #[derive(Accounts)]
 pub struct StakeSol<'info> {
     #[account(
-        seeds = [b"vault_config"],
+        seeds = [b"vault_sol_config"],
         bump = config.bump,
         constraint = !config.paused @ VaultSolError::VaultPaused,
     )]
@@ -35,7 +35,7 @@ pub struct StakeSol<'info> {
         constraint = treasury.key() == config.treasury @ VaultSolError::InvalidAuthority
     )]
     pub treasury: SystemAccount<'info>,
-    
+
     // System accounts
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
@@ -45,7 +45,7 @@ pub struct StakeSol<'info> {
 #[derive(Accounts)]
 pub struct UnstakeSol<'info> {
     #[account(
-        seeds = [b"vault_config"],
+        seeds = [b"vault_sol_config"],
         bump = config.bump,
         constraint = !config.paused @ VaultSolError::VaultPaused,
     )]
@@ -140,7 +140,7 @@ pub fn stake_sol(ctx: Context<StakeSol>, amount: u64) -> Result<()> {
             &config.treasury,
             amount
         ),
-        &[
+        &[ 
             user.to_account_info(),
             ctx.accounts.treasury.to_account_info(),
             ctx.accounts.system_program.to_account_info(),
@@ -261,7 +261,7 @@ pub fn create_stake(
             &ctx.accounts.treasury.key(),
             amount,
         ),
-        &[
+        &[ 
             user.to_account_info(),
             ctx.accounts.treasury.to_account_info(),
             ctx.accounts.system_program.to_account_info(),

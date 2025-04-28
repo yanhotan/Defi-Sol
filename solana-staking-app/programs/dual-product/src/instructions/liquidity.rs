@@ -1,5 +1,4 @@
 use anchor_lang::prelude::*;
-use anchor_spl::token::{Mint, Token, TokenAccount};
 use crate::state::{DualProductConfig, UserDualPosition, PoolState};
 use crate::errors::DualProductError;
 
@@ -17,7 +16,7 @@ pub struct AddToLP<'info> {
         seeds = [b"user_dual_position", user.key().as_ref()],
         bump = user_position.bump,
         constraint = user_position.owner == user.key(),
-        constraint = !user_position.in_lp @ DualProductError::PositionInLP,
+        constraint = !user_position.in_lp @ DualProductError::PositionAlreadyInLP,
     )]
     pub user_position: Account<'info, UserDualPosition>,
 
@@ -49,7 +48,7 @@ pub struct RemoveFromLP<'info> {
         seeds = [b"user_dual_position", user.key().as_ref()],
         bump = user_position.bump,
         constraint = user_position.owner == user.key(),
-        constraint = user_position.in_lp @ DualProductError::PositionInLP,
+        constraint = user_position.in_lp @ DualProductError::PositionNotInLP,
     )]
     pub user_position: Account<'info, UserDualPosition>,
 

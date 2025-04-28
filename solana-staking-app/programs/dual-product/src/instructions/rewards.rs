@@ -1,5 +1,5 @@
 use anchor_lang::prelude::*;
-use anchor_spl::token::{Mint, Token, TokenAccount};
+use anchor_spl::token::{Token, TokenAccount};
 use crate::state::{DualProductConfig, UserDualPosition, PoolState, RewardSource};
 use crate::errors::DualProductError;
 
@@ -96,7 +96,7 @@ pub fn claim_dual_rewards(
             )?;
         },
         RewardSource::LP => {
-            require!(user_position.in_lp, DualProductError::PositionInLP);
+            require!(user_position.in_lp, DualProductError::PositionNotInLP);
             
             // Calculate LP rewards
             let lp_rewards = calculate_lp_rewards(
@@ -157,9 +157,93 @@ pub fn claim_dual_rewards(
             }
         },
         RewardSource::Both => {
-            // Recursively call for both reward sources
-            claim_dual_rewards(ctx.clone(), RewardSource::LST)?;
-            claim_dual_rewards(ctx.clone(), RewardSource::LP)?;
+            // Handle both reward sources directly instead of recursive calls
+            
+            // First handle LST rewards
+            let lst_rewards = calculate_lst_rewards(
+                user_position.lst_amount,
+                time_staked,
+                pool_state.lst_per_share,
+            )?;
+
+            let lst_fee = (lst_rewards as u128)
+                .checked_mul(config.platform_fee_bps as u128)
+                .ok_or(DualProductError::MathOverflow)?
+                .checked_div(10000)
+                .ok_or(DualProductError::MathOverflow)? as u64;
+
+            let lst_to_user = lst_rewards.checked_sub(lst_fee)
+                .ok_or(DualProductError::MathOverflow)?;
+
+            // Transfer LST rewards
+            anchor_spl::token::transfer(
+                CpiContext::new(
+                    ctx.accounts.token_program.to_account_info(),
+                    anchor_spl::token::Transfer {
+                        from: ctx.accounts.vault_lst_reward_account.to_account_info(),
+                        to: ctx.accounts.user_lst_reward_account.to_account_info(),
+                        authority: config.to_account_info(),
+                    },
+                ),
+                lst_to_user,
+            )?;
+            
+            // Then handle LP rewards if eligible
+            if user_position.in_lp {
+                let lp_rewards = calculate_lp_rewards(
+                    user_position.lst_amount,
+                    user_position.usdc_amount,
+                    time_staked,
+                    pool_state,
+                )?;
+
+                let (lst_lp_rewards, usdc_lp_rewards) = lp_rewards;
+
+                let lst_fee = (lst_lp_rewards as u128)
+                    .checked_mul(config.platform_fee_bps as u128)
+                    .ok_or(DualProductError::MathOverflow)?
+                    .checked_div(10000)
+                    .ok_or(DualProductError::MathOverflow)? as u64;
+
+                let usdc_fee = (usdc_lp_rewards as u128)
+                    .checked_mul(config.platform_fee_bps as u128)
+                    .ok_or(DualProductError::MathOverflow)?
+                    .checked_div(10000)
+                    .ok_or(DualProductError::MathOverflow)? as u64;
+
+                let lst_to_user = lst_lp_rewards.checked_sub(lst_fee)
+                    .ok_or(DualProductError::MathOverflow)?;
+                let usdc_to_user = usdc_lp_rewards.checked_sub(usdc_fee)
+                    .ok_or(DualProductError::MathOverflow)?;
+
+                if lst_to_user > 0 {
+                    anchor_spl::token::transfer(
+                        CpiContext::new(
+                            ctx.accounts.token_program.to_account_info(),
+                            anchor_spl::token::Transfer {
+                                from: ctx.accounts.vault_lst_reward_account.to_account_info(),
+                                to: ctx.accounts.user_lst_reward_account.to_account_info(),
+                                authority: config.to_account_info(),
+                            },
+                        ),
+                        lst_to_user,
+                    )?;
+                }
+
+                if usdc_to_user > 0 {
+                    anchor_spl::token::transfer(
+                        CpiContext::new(
+                            ctx.accounts.token_program.to_account_info(),
+                            anchor_spl::token::Transfer {
+                                from: ctx.accounts.vault_usdc_reward_account.to_account_info(),
+                                to: ctx.accounts.user_usdc_reward_account.to_account_info(),
+                                authority: config.to_account_info(),
+                            },
+                        ),
+                        usdc_to_user,
+                    )?;
+                }
+            }
         },
     }
 

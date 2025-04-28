@@ -17,7 +17,7 @@ pub struct WithdrawDual<'info> {
         seeds = [b"user_dual_position", user.key().as_ref()],
         bump = user_position.bump,
         constraint = user_position.owner == user.key(),
-        constraint = !user_position.in_lp @ DualProductError::PositionInLP,
+        constraint = !user_position.in_lp @ DualProductError::PositionAlreadyInLP,
     )]
     pub user_position: Account<'info, UserDualPosition>,
 

@@ -52,9 +52,13 @@ pub fn claim_rewards(ctx: Context<ClaimRewards>) -> Result<()> {
         rewards_pool.apy_points,
     )?;
 
+    // Get account infos
+    let rewards_pool_info = ctx.accounts.rewards_pool.to_account_info();
+    let user_info = ctx.accounts.user.to_account_info();
+
     // Validate rewards pool has enough SOL balance
     require!(
-        rewards_pool.to_account_info().lamports() >= rewards,
+        rewards_pool_info.lamports() >= rewards,
         VaultSolError::InsufficientRewards
     );
 
@@ -79,16 +83,12 @@ pub fn claim_rewards(ctx: Context<ClaimRewards>) -> Result<()> {
         .ok_or(VaultSolError::MathOverflow)?;
 
     // Transfer rewards to user
-    **ctx.accounts.rewards_pool.try_borrow_mut_lamports()? = ctx
-        .accounts
-        .rewards_pool
+    **rewards_pool_info.try_borrow_mut_lamports()? = rewards_pool_info
         .lamports()
         .checked_sub(reward_amount)
         .ok_or(VaultSolError::MathOverflow)?;
 
-    **ctx.accounts.user.try_borrow_mut_lamports()? = ctx
-        .accounts
-        .user
+    **user_info.try_borrow_mut_lamports()? = user_info
         .lamports()
         .checked_add(reward_amount)
         .ok_or(VaultSolError::MathOverflow)?;

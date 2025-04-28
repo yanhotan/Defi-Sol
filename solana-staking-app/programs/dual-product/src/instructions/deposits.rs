@@ -3,7 +3,7 @@ use anchor_spl::{
     token::{Token, TokenAccount, Mint, Transfer},
     associated_token::AssociatedToken,
 };
-use crate::state::{DualConfig, DualPool, UserPosition};
+use crate::state::{DualConfig, DualPool, DualPosition};
 use crate::errors::DualProductError;
 
 #[derive(Accounts)]
@@ -25,11 +25,11 @@ pub struct CreateDualPosition<'info> {
     #[account(
         init,
         payer = user,
-        space = 8 + std::mem::size_of::<UserPosition>(),
+        space = 8 + std::mem::size_of::<DualPosition>(),
         seeds = [b"user_position", user.key().as_ref()],
         bump
     )]
-    pub user_position: Account<'info, UserPosition>,
+    pub user_position: Account<'info, DualPosition>,
 
     #[account(mut)]
     pub user: Signer<'info>,
@@ -40,7 +40,7 @@ pub struct CreateDualPosition<'info> {
     
     #[account(mut)]
     pub pool_wsol_account: Account<'info, TokenAccount>,
-    
+
     // USDC token account
     #[account(mut)]
     pub user_usdc_account: Account<'info, TokenAccount>,
@@ -76,9 +76,9 @@ pub struct AddToPosition<'info> {
         mut,
         seeds = [b"user_position", user.key().as_ref()],
         bump = user_position.bump,
-        has_one = user
+        constraint = user_position.owner == user.key() @ DualProductError::InvalidTokenAccountOwner
     )]
-    pub user_position: Account<'info, UserPosition>,
+    pub user_position: Account<'info, DualPosition>,
 
     #[account(mut)]
     pub user: Signer<'info>,
@@ -104,7 +104,7 @@ pub fn create_dual_position(
     usdc_amount: u64,
 ) -> Result<()> {
     let config = &mut ctx.accounts.config;
-    require!(!config.paused, DualProductError::ProgramPaused);
+    require!(!config.paused, DualProductError::ProductPaused);
     require!(
         wsol_amount >= config.min_dual_amount,
         DualProductError::BelowMinimumAmount
@@ -139,10 +139,10 @@ pub fn create_dual_position(
 
     // Initialize user position
     let user_position = &mut ctx.accounts.user_position;
-    user_position.user = ctx.accounts.user.key();
+    user_position.owner = ctx.accounts.user.key();
     user_position.wsol_amount = wsol_amount;
     user_position.usdc_amount = usdc_amount;
-    user_position.start_timestamp = Clock::get()?.unix_timestamp;
+    user_position.start_time = Clock::get()?.unix_timestamp;
     user_position.last_reward_claim = Clock::get()?.unix_timestamp;
     user_position.bump = *ctx.bumps.get("user_position").unwrap();
 
@@ -159,7 +159,7 @@ pub fn add_to_position(
     usdc_amount: u64,
 ) -> Result<()> {
     let config = &ctx.accounts.config;
-    require!(!config.paused, DualProductError::ProgramPaused);
+    require!(!config.paused, DualProductError::ProductPaused);
 
     // Transfer WSOL
     let wsol_transfer_ctx = CpiContext::new(
