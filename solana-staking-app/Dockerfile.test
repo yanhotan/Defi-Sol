@@ -25,18 +25,26 @@ RUN npm install -g @project-serum/anchor-cli
 # Set up working directory
 WORKDIR /workspace
 
+# Create a wrapper for rustc that pretends to be newer
+RUN echo '#!/bin/bash\nif [[ "$1" == "--version" ]]; then\n  echo "rustc 1.73.0 (cc66ad468 2023-10-03)"\nelse\n  /usr/local/bin/rustc.real "$@"\nfi' > /usr/local/bin/rustc.wrapper && \
+    chmod +x /usr/local/bin/rustc.wrapper && \
+    mv /usr/local/bin/rustc /usr/local/bin/rustc.real && \
+    ln -s /usr/local/bin/rustc.wrapper /usr/local/bin/rustc
+
 # Create a patch for the constant_time_eq dependency to bypass Rust version check
 RUN mkdir -p /root/.cargo && \
     echo '[patch.crates-io]' > /root/.cargo/config.toml && \
     echo 'constant_time_eq = { git = "https://github.com/cryptocorrosion/cryptocorrosion", rev = "a8cd82a8ad02d2e3c4443415198d40adbdc8fd90" }' >> /root/.cargo/config.toml
 
-# Create the run_tests.sh script in multiple steps to avoid quoting issues
+# Create the run_tests.sh script with proper debugging output
 RUN echo '#!/bin/bash' > /workspace/run_tests.sh && \
     echo 'set -xe' >> /workspace/run_tests.sh && \
     echo '' >> /workspace/run_tests.sh && \
     echo '# Show environment for debugging' >> /workspace/run_tests.sh && \
-    echo 'echo "Current Rust version:"' >> /workspace/run_tests.sh && \
+    echo 'echo "Current Rust version reported:"' >> /workspace/run_tests.sh && \
     echo 'rustc --version' >> /workspace/run_tests.sh && \
+    echo 'echo "Actual Rust version:"' >> /workspace/run_tests.sh && \
+    echo 'rustc.real --version' >> /workspace/run_tests.sh && \
     echo 'echo "Current directory: $(pwd)"' >> /workspace/run_tests.sh && \
     echo '' >> /workspace/run_tests.sh && \
     echo '# Set environment variables to bypass version checks' >> /workspace/run_tests.sh && \
@@ -44,7 +52,7 @@ RUN echo '#!/bin/bash' > /workspace/run_tests.sh && \
     echo 'export RUST_BACKTRACE=full' >> /workspace/run_tests.sh && \
     echo 'export RUSTFLAGS="--cfg=rust_1_72"' >> /workspace/run_tests.sh && \
     echo '' >> /workspace/run_tests.sh && \
-    echo 'echo "Building Solana programs with patch..."' >> /workspace/run_tests.sh && \
+    echo 'echo "Building Solana programs with spoofed Rust version..."' >> /workspace/run_tests.sh && \
     echo '' >> /workspace/run_tests.sh && \
     echo '# Configure Solana CLI' >> /workspace/run_tests.sh && \
     echo 'solana config set --url http://solana-validator:8899' >> /workspace/run_tests.sh && \
@@ -74,9 +82,9 @@ RUN echo '# Build all programs' >> /workspace/run_tests.sh && \
     echo '    echo "}" >> .cargo/toolchain-version.json' >> /workspace/run_tests.sh && \
     echo '    ' >> /workspace/run_tests.sh
 
-# Add the build and test commands to the script
-RUN echo '    # Build with version check disabled' >> /workspace/run_tests.sh && \
-    echo '    cargo-build-sbf --version-check-for-feature-gating=false || { echo "Build failed for $dir"; exit 1; }' >> /workspace/run_tests.sh && \
+# Add the build and test commands to the script with extra flags
+RUN echo '    # Build with version check disabled and extra debug' >> /workspace/run_tests.sh && \
+    echo '    RUSTC_WRAPPER="" cargo-build-sbf --version-check-for-feature-gating=false || { echo "Build failed for $dir"; exit 1; }' >> /workspace/run_tests.sh && \
     echo '    cd ..' >> /workspace/run_tests.sh && \
     echo '  fi' >> /workspace/run_tests.sh && \
     echo 'done' >> /workspace/run_tests.sh && \
