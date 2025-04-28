@@ -53,11 +53,19 @@ RUN apt-get update && \
 ENV SBF_LLVM_PATH="/usr/lib/llvm-14"
 ENV LLVM_CONFIG="/usr/bin/llvm-config-14"
 
-# Let Solana install the target during build - don't try to add it directly
-# This ensures the correct target is used based on the Solana version
+# Set Cargo configuration for workspace inheritance
+RUN mkdir -p ~/.cargo && \
+    echo '[build]' > ~/.cargo/config && \
+    echo 'target = "sbf-solana-solana"' >> ~/.cargo/config && \
+    echo '[unstable]' >> ~/.cargo/config && \
+    echo 'build-std = ["std", "panic_abort"]' >> ~/.cargo/config && \
+    echo 'features = ["workspace-inheritance"]' >> ~/.cargo/config
 
-# Install Anchor using NPM
-RUN npm install -g @coral-xyz/anchor-cli
+# Enable nightly for workspace inheritance features
+RUN rustup default nightly
+
+# Install Anchor using Cargo instead of NPM to avoid GLIBC version issues
+RUN cargo install --git https://github.com/coral-xyz/anchor --tag v0.28.0 anchor-cli --locked
 
 # Create workspace directory
 WORKDIR /workspace
