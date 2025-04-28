@@ -50,19 +50,19 @@ services:
         done &&
         echo 'Validator is ready!' &&
         solana config set --url http://solana-validator:8899 &&
-        solana-keygen new --no-bip39-passphrase -o /root/.config/solana/id.json &&
+        solana-keygen new --no-bip39-passphrase --force -o /root/.config/solana/id.json &&
         echo 'Setting up project dependencies...' &&
         cd /workspace &&
         echo 'Building individual programs...' &&
         mkdir -p target/deploy &&
         cd programs/locking-vault &&
-        cargo build-bpf --bpf-out-dir /workspace/target/deploy &&
+        cargo build-sbf --sbf-out-dir /workspace/target/deploy &&
         cd ../stablecoin-vault &&
-        cargo build-bpf --bpf-out-dir /workspace/target/deploy &&
+        cargo build-sbf --sbf-out-dir /workspace/target/deploy &&
         cd ../dual-product &&
-        cargo build-bpf --bpf-out-dir /workspace/target/deploy &&
+        cargo build-sbf --sbf-out-dir /workspace/target/deploy &&
         cd ../vault-sol &&
-        cargo build-bpf --bpf-out-dir /workspace/target/deploy &&
+        cargo build-sbf --sbf-out-dir /workspace/target/deploy &&
         cd /workspace &&
         echo 'Build complete!' &&
         touch /workspace/.build-complete &&

@@ -35,6 +35,12 @@ pub struct ClaimRewards<'info> {
 pub fn claim_rewards(ctx: Context<ClaimRewards>) -> Result<()> {
     let config = &ctx.accounts.config;
     let stake_position = &mut ctx.accounts.stake_position;
+    
+    // Get account infos first before borrowing rewards_pool mutably
+    let rewards_pool_info = ctx.accounts.rewards_pool.to_account_info();
+    let user_info = ctx.accounts.user.to_account_info();
+    
+    // Now we can safely mutably borrow rewards_pool
     let rewards_pool = &mut ctx.accounts.rewards_pool;
     
     // Calculate rewards based on staking duration
@@ -51,10 +57,6 @@ pub fn claim_rewards(ctx: Context<ClaimRewards>) -> Result<()> {
         time_staked,
         rewards_pool.apy_points,
     )?;
-
-    // Get account infos
-    let rewards_pool_info = ctx.accounts.rewards_pool.to_account_info();
-    let user_info = ctx.accounts.user.to_account_info();
 
     // Validate rewards pool has enough SOL balance
     require!(

@@ -149,7 +149,12 @@ pub fn add_rewards(
     amount: u64,
 ) -> Result<()> {
     require!(amount > 0, VaultSolError::InvalidAmount);
-
+    
+    // Get account info references first, before mutably borrowing rewards_pool
+    let authority_info = ctx.accounts.authority.to_account_info();
+    let rewards_pool_info = ctx.accounts.rewards_pool.to_account_info();
+    
+    // Now we can safely mutably borrow rewards_pool
     let rewards_pool = &mut ctx.accounts.rewards_pool;
     
     // Initialize rewards pool if it's the first time
@@ -164,10 +169,6 @@ pub fn add_rewards(
         ctx.accounts.authority.lamports() >= amount,
         VaultSolError::InsufficientBalance
     );
-
-    // Get account info to manipulate lamports
-    let authority_info = ctx.accounts.authority.to_account_info();
-    let rewards_pool_info = ctx.accounts.rewards_pool.to_account_info();
 
     // Transfer lamports from authority to rewards pool
     **authority_info.try_borrow_mut_lamports()? = authority_info
