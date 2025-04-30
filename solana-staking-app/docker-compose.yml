@@ -54,17 +54,25 @@ services:
         echo 'Setting up project dependencies...' &&
         cd /workspace &&
         echo 'Building individual programs...' &&
-        mkdir -p target/deploy &&
+        mkdir -p target/deploy programs/target/deploy &&
+        chmod -R 777 target programs/target &&
         cd programs/locking-vault &&
         cargo build-sbf --sbf-out-dir /workspace/target/deploy &&
+        cp -f /workspace/target/deploy/*.so /workspace/programs/target/deploy/ &&
         cd ../stablecoin-vault &&
         cargo build-sbf --sbf-out-dir /workspace/target/deploy &&
+        cp -f /workspace/target/deploy/*.so /workspace/programs/target/deploy/ &&
         cd ../dual-product &&
         cargo build-sbf --sbf-out-dir /workspace/target/deploy &&
+        cp -f /workspace/target/deploy/*.so /workspace/programs/target/deploy/ &&
         cd ../vault-sol &&
         cargo build-sbf --sbf-out-dir /workspace/target/deploy &&
+        cp -f /workspace/target/deploy/*.so /workspace/programs/target/deploy/ &&
         cd /workspace &&
         echo 'Build complete!' &&
+        ls -la target/deploy/ &&
+        ls -la programs/target/deploy/ || echo 'Programs deploy directory not found' &&
+        chmod -R 777 target programs/target &&
         touch /workspace/.build-complete &&
         # Keep the container running
         tail -f /dev/null"
@@ -91,6 +99,7 @@ services:
     environment:
       - ANCHOR_PROVIDER_URL=http://solana-validator:8899
       - ANCHOR_WALLET=/workspace/.anchor/wallet/wallet.json
+      - RUST_BACKTRACE=full
     command: >
       bash -c "
         echo 'Waiting for program builds to complete...' &&
@@ -98,8 +107,18 @@ services:
           echo 'Waiting for program builds...'
           sleep 2
         done &&
+        echo 'Creating necessary target directories...' &&
+        mkdir -p /workspace/programs/target/src &&
+        mkdir -p /workspace/programs/target/deploy &&
+        mkdir -p /workspace/programs/target/release &&
+        mkdir -p /workspace/target/deploy &&
+        chmod -R 777 /workspace/programs/target &&
+        chmod -R 777 /workspace/target &&
+        echo 'Checking for compiled program files:' &&
+        ls -la /workspace/target/deploy/ &&
+        ls -la /workspace/programs/target/deploy/ &&
         echo 'Running tests...' &&
-        anchor test --skip-local-validator"
+        /workspace/run_tests.sh"
     depends_on:
       - program-builder
 

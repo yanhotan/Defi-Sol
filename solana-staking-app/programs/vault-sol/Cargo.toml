@@ -1,5 +1,3 @@
-cargo-features = ["workspace-inheritance"]
-
 [package]
 name = "vault-sol"
 version = "0.1.0"
@@ -18,9 +16,9 @@ cpi = ["no-entrypoint"]
 default = []
 
 [dependencies]
-anchor-lang = { workspace = true, features = ["init-if-needed"] }
-anchor-spl = { workspace = true }
-solana-program = { workspace = true }
+anchor-lang = { version = "=0.26.0", features = ["init-if-needed"] }
+anchor-spl = "=0.26.0"
+solana-program = "=1.14.17"
 # Temporarily commented out to avoid dependency conflicts
 # marinade-cpi = "=0.1.0" 
 num-traits = "0.2"
