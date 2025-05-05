@@ -1,6 +1,6 @@
-FROM rust:1.72
+FROM rust:1.73
 
-# Install build dependencies
+# Install dependencies including libelf-dev and llvm
 RUN apt-get update && apt-get install -y \
     git \
     curl \
@@ -9,61 +9,41 @@ RUN apt-get update && apt-get install -y \
     libssl-dev \
     libudev-dev \
     python3 \
-    nodejs \
-    npm \
     wget \
-    bzip2 \
+    libelf-dev \
+    zlib1g-dev \
+    llvm-dev \
+    clang \
+    libclang-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Install OpenSSL 1.1 from Debian backports
-RUN mkdir -p /etc/apt/keyrings && \
-    wget -qO - https://snapshot.debian.org/archive/debian/20230320T000000Z/pool/main/o/openssl/libssl1.1_1.1.1n-0+deb11u4_amd64.deb > /tmp/libssl1.1.deb && \
-    dpkg -i /tmp/libssl1.1.deb && \
-    rm -f /tmp/libssl1.1.deb
+# Install Node.js
+RUN curl -fsSL https://deb.nodesource.com/setup_16.x | bash -
+RUN apt-get update && apt-get install -y nodejs && rm -rf /var/lib/apt/lists/*
 
-# Set OpenSSL environment variables
-ENV LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH
-ENV OPENSSL_LIB_DIR=/usr/lib/x86_64-linux-gnu
-ENV OPENSSL_INCLUDE_DIR=/usr/include
+# Install Solana CLI tools
+RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/* && \
+    mkdir -p /root/.local/share/solana/install/ && \
+    curl -sSfL --max-time 300 https://release.solana.com/v1.14.17/solana-release-x86_64-unknown-linux-gnu.tar.bz2 -o /tmp/solana.tar.bz2 && \
+    tar -xjf /tmp/solana.tar.bz2 -C /root/.local/share/solana/install/ && \
+    mv /root/.local/share/solana/install/solana-release/* /root/.local/share/solana/install/ && \
+    rm /tmp/solana.tar.bz2
 
-# Setup compatible Rust version for Solana
-# Use Rust 1.68.2 which is known to work with Solana BPF
-RUN rustup install 1.68.2
-RUN rustup default 1.68.2
-RUN rustup component add rust-src --toolchain 1.68.2
+ENV PATH="/root/.local/share/solana/install/bin:${PATH}"
 
-# Also install nightly for solana-specific needs
-RUN rustup toolchain install nightly
-RUN rustup component add rust-src --toolchain nightly
+# Install Anchor CLI
+RUN npm install -g @project-serum/anchor-cli
 
-# Install Solana CLI tools - using version 1.16.19
-RUN sh -c "$(curl -sSfL https://release.solana.com/v1.16.19/install)"
-ENV PATH="/root/.local/share/solana/install/active_release/bin:${PATH}"
+# Verify Solana installation and print version
+RUN solana --version
 
-# Install necessary LLVM version for Solana BPF
-RUN apt-get update && \
-    apt-get install -y software-properties-common && \
-    wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | apt-key add - && \
-    add-apt-repository "deb http://apt.llvm.org/bullseye/ llvm-toolchain-bullseye-14 main" && \
-    apt-get update && \
-    apt-get install -y llvm-14 clang-14 && \
-    rm -rf /var/lib/apt/lists/*
+# Install cargo-build-sbf (using the Solana-provided version instead of cargo install)
+RUN ln -s /root/.local/share/solana/install/bin/cargo-build-bpf /root/.cargo/bin/ || true
+RUN ln -s /root/.local/share/solana/install/bin/cargo-build-sbf /root/.cargo/bin/ || true
 
-# Configure BPF environment variables
-ENV SBF_LLVM_PATH="/usr/lib/llvm-14"
-ENV LLVM_CONFIG="/usr/bin/llvm-config-14"
-
-# Let Solana install the target during build - don't try to add it directly
-# This ensures the correct target is used based on the Solana version
-
-# Install Anchor using NPM
-RUN npm install -g @coral-xyz/anchor-cli
-
-# Create workspace directory
+# Set up working directory
 WORKDIR /workspace
 
-# Configure Solana to use local validator
-RUN solana config set --url http://solana-validator:8899
-
-# The source code will be mounted as a volume
-CMD ["bash"]
+# Show Rust version
+RUN rustc --version
+RUN cargo --version

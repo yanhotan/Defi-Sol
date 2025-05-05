@@ -23,6 +23,8 @@ services:
           --slots-per-epoch 32
           --tick-per-slot 8
           --quiet"
+    networks:
+      - solana-network
     healthcheck:
       test: ["CMD", "bash", "-c", "curl -s http://localhost:8899 -X POST -H 'Content-Type: application/json' -d '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"getHealth\"}' | grep -q 'ok'"]
       interval: 10s
@@ -76,9 +78,11 @@ services:
         touch /workspace/.build-complete &&
         # Keep the container running
         tail -f /dev/null"
+    networks:
+      - solana-network
     depends_on:
       solana-validator:
-        condition: service_started
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "test", "-f", "/workspace/.build-complete"]
       interval: 5s
@@ -100,6 +104,8 @@ services:
       - ANCHOR_PROVIDER_URL=http://solana-validator:8899
       - ANCHOR_WALLET=/workspace/.anchor/wallet/wallet.json
       - RUST_BACKTRACE=full
+    networks:
+      - solana-network
     command: >
       bash -c "
         echo 'Waiting for program builds to complete...' &&
@@ -107,21 +113,23 @@ services:
           echo 'Waiting for program builds...'
           sleep 2
         done &&
-        echo 'Creating necessary target directories...' &&
-        mkdir -p /workspace/programs/target/src &&
-        mkdir -p /workspace/programs/target/deploy &&
-        mkdir -p /workspace/programs/target/release &&
-        mkdir -p /workspace/target/deploy &&
-        chmod -R 777 /workspace/programs/target &&
-        chmod -R 777 /workspace/target &&
-        echo 'Checking for compiled program files:' &&
-        ls -la /workspace/target/deploy/ &&
-        ls -la /workspace/programs/target/deploy/ &&
-        echo 'Running tests...' &&
-        /workspace/run_tests.sh"
+        echo 'Setting script permissions...' &&
+        chmod +x /workspace/run-full-tests.sh || true &&
+        chmod +x /workspace/update-program-ids.sh || true &&
+        chmod +x /workspace/setup-wallet-test.sh || true &&
+        chmod +x /workspace/run_tests.sh || true &&
+        echo 'Running the comprehensive test suite...' &&
+        /workspace/run-full-tests.sh"
     depends_on:
-      - program-builder
+      solana-validator:
+        condition: service_healthy
+      program-builder:
+        condition: service_completed_successfully
 
 volumes:
   cargo-cache:
   target-cache:
+
+networks:
+  solana-network:
+    driver: bridge

@@ -1,6 +1,6 @@
 FROM rust:1.73
 
-# Install dependencies
+# Install dependencies including libelf-dev and llvm
 RUN apt-get update && apt-get install -y \
     git \
     curl \
@@ -10,6 +10,11 @@ RUN apt-get update && apt-get install -y \
     libudev-dev \
     python3 \
     wget \
+    libelf-dev \
+    zlib1g-dev \
+    llvm-dev \
+    clang \
+    libclang-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Install OpenSSL 1.1 from Debian backports
@@ -71,6 +76,10 @@ ENV PATH="/root/.local/share/solana/install/bin:${PATH}"
 
 # Verify Solana installation
 RUN solana --version || { echo "Solana installation failed"; exit 1; }
+
+# Install cargo-build-sbf (using the Solana-provided version instead of cargo install)
+RUN ln -s /root/.local/share/solana/install/bin/cargo-build-bpf /root/.cargo/bin/ || true
+RUN ln -s /root/.local/share/solana/install/bin/cargo-build-sbf /root/.cargo/bin/ || true
 
 # Install Anchor CLI
 RUN npm install -g @project-serum/anchor-cli
@@ -160,12 +169,69 @@ RUN echo '# Build all programs' >> /workspace/run_tests.sh && \
 
 RUN chmod +x /workspace/run_tests.sh
 
+# Set the entry point to our test script
+RUN echo '# Add retry logic for connecting to the Solana validator' >> /workspace/run_tests.sh && \
+    echo 'echo "Waiting for Solana validator to be available..."' >> /workspace/run_tests.sh && \
+    echo 'max_attempts=30' >> /workspace/run_tests.sh && \
+    echo 'attempt=1' >> /workspace/run_tests.sh && \
+    echo 'while [ $attempt -le $max_attempts ]; do' >> /workspace/run_tests.sh && \
+    echo '  echo "Attempt $attempt/$max_attempts: Testing connection to solana-validator:8899..."' >> /workspace/run_tests.sh && \
+    echo '  if curl -s http://solana-validator:8899 -X POST -H "Content-Type: application/json" \\' >> /workspace/run_tests.sh && \
+    echo '     -d "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"getHealth\"}" | grep -q "ok"; then' >> /workspace/run_tests.sh && \
+    echo '    echo "Solana validator is up and running!"' >> /workspace/run_tests.sh && \
+    echo '    break' >> /workspace/run_tests.sh && \
+    echo '  else' >> /workspace/run_tests.sh && \
+    echo '    if [ $attempt -eq $max_attempts ]; then' >> /workspace/run_tests.sh && \
+    echo '      echo "Max attempts reached. Proceeding anyway, but tests may fail."' >> /workspace/run_tests.sh && \
+    echo '    else' >> /workspace/run_tests.sh && \
+    echo '      echo "Validator not available yet. Waiting 5 seconds..."' >> /workspace/run_tests.sh && \
+    echo '      sleep 5' >> /workspace/run_tests.sh && \
+    echo '      attempt=$((attempt+1))' >> /workspace/run_tests.sh && \
+    echo '    fi' >> /workspace/run_tests.sh && \
+    echo '  fi' >> /workspace/run_tests.sh && \
+    echo 'done' >> /workspace/run_tests.sh && \
+    echo '' >> /workspace/run_tests.sh && \
+    echo '# Set up the wallet' >> /workspace/run_tests.sh && \
+    echo 'echo "Setting up test wallet"' >> /workspace/run_tests.sh && \
+    echo 'if [ -f /workspace/setup-wallet-test.sh ]; then' >> /workspace/run_tests.sh && \
+    echo '  chmod +x /workspace/setup-wallet-test.sh' >> /workspace/run_tests.sh && \
+    echo '  /workspace/setup-wallet-test.sh' >> /workspace/run_tests.sh && \
+    echo 'else' >> /workspace/run_tests.sh && \
+    echo '  echo "Warning: setup-wallet-test.sh not found. Using default wallet setup."' >> /workspace/run_tests.sh && \
+    echo '  # Configure Solana CLI' >> /workspace/run_tests.sh && \
+    echo '  solana config set --url http://solana-validator:8899' >> /workspace/run_tests.sh && \
+    echo '  # Create directories' >> /workspace/run_tests.sh && \
+    echo '  mkdir -p /root/.config/solana' >> /workspace/run_tests.sh && \
+    echo '  mkdir -p /workspace/.anchor/wallet' >> /workspace/run_tests.sh && \
+    echo '  # Generate keypair' >> /workspace/run_tests.sh && \
+    echo '  solana-keygen new --no-bip39-passphrase --force -o /root/.config/solana/id.json' >> /workspace/run_tests.sh && \
+    echo '  cp /root/.config/solana/id.json /workspace/.anchor/wallet/wallet.json' >> /workspace/run_tests.sh && \
+    echo '  WALLET_ADDRESS=$(solana address)' >> /workspace/run_tests.sh && \
+    echo '  echo "Test wallet address: $WALLET_ADDRESS"' >> /workspace/run_tests.sh && \
+    echo '  # Retry airdrop' >> /workspace/run_tests.sh && \
+    echo '  for i in {1..5}; do' >> /workspace/run_tests.sh && \
+    echo '    echo "Airdrop attempt $i..."' >> /workspace/run_tests.sh && \
+    echo '    if solana airdrop 10 "$WALLET_ADDRESS"; then' >> /workspace/run_tests.sh && \
+    echo '      break' >> /workspace/run_tests.sh && \
+    echo '    else' >> /workspace/run_tests.sh && \
+    echo '      echo "Airdrop attempt $i failed. Waiting before retry..."' >> /workspace/run_tests.sh && \
+    echo '      sleep 5' >> /workspace/run_tests.sh && \
+    echo '    fi' >> /workspace/run_tests.sh && \
+    echo '  done' >> /workspace/run_tests.sh && \
+    echo 'fi' >> /workspace/run_tests.sh
+
 # Copy package.json files first and install dependencies
 COPY package*.json ./ 
 RUN npm install
 
+# Ensure curl is installed for health checks
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
+
 # Copy the rest of the code
 COPY . .
+
+# Make the setup-wallet-test.sh script executable
+RUN chmod +x /workspace/setup-wallet-test.sh || true
 
 # Set the entry point to our test script
 CMD ["/workspace/run_tests.sh"]
