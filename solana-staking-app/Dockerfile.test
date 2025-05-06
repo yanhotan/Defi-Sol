@@ -1,6 +1,6 @@
 FROM rust:1.73
 
-# Install dependencies including libelf-dev and llvm
+# Install dependencies
 RUN apt-get update && apt-get install -y \
     git \
     curl \
@@ -10,11 +10,6 @@ RUN apt-get update && apt-get install -y \
     libudev-dev \
     python3 \
     wget \
-    libelf-dev \
-    zlib1g-dev \
-    llvm-dev \
-    clang \
-    libclang-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Install OpenSSL 1.1 from Debian backports
@@ -76,10 +71,6 @@ ENV PATH="/root/.local/share/solana/install/bin:${PATH}"
 
 # Verify Solana installation
 RUN solana --version || { echo "Solana installation failed"; exit 1; }
-
-# Install cargo-build-sbf (using the Solana-provided version instead of cargo install)
-RUN ln -s /root/.local/share/solana/install/bin/cargo-build-bpf /root/.cargo/bin/ || true
-RUN ln -s /root/.local/share/solana/install/bin/cargo-build-sbf /root/.cargo/bin/ || true
 
 # Install Anchor CLI
 RUN npm install -g @project-serum/anchor-cli

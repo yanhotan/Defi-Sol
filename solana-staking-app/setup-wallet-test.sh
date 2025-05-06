@@ -42,32 +42,42 @@ fi
 WALLET_ADDRESS=$(solana address)
 echo "Test wallet address: $WALLET_ADDRESS"
 
-# Request airdrop with retry logic
-echo "Requesting airdrop of 10 SOL"
-airdrop_success=false
-for i in {1..5}; do
-    echo "Airdrop attempt $i..."
-    if solana airdrop 10 "$WALLET_ADDRESS"; then
-        airdrop_success=true
-        break
+# Request multiple airdrops to get enough SOL
+echo "Requesting multiple airdrops for a total of at least 15 SOL"
+total_sol=0
+
+# Try to get at least 15 SOL with multiple airdrops
+while [ "$total_sol" -lt 15 ]; do
+    echo "Current balance: $total_sol SOL - Requesting another 15 SOL airdrop..."
+    
+    # Try airdrop with retry logic
+    airdrop_success=false
+    for i in {1..5}; do
+        echo "Airdrop attempt $i..."
+        if solana airdrop 15 "$WALLET_ADDRESS"; then
+            airdrop_success=true
+            break
+        else
+            echo "Airdrop attempt $i failed. Waiting before retry..."
+            sleep 5
+        fi
+    done
+    
+    if [ "$airdrop_success" = true ]; then
+        echo "Airdrop successful!"
+        # Check current balance
+        total_sol=$(solana balance "$WALLET_ADDRESS" | grep -oE '[0-9]+' | head -1)
+        echo "Current balance: $total_sol SOL"
     else
-        echo "Airdrop attempt $i failed. Waiting before retry..."
-        sleep 5
+        echo "All airdrop attempts failed, but continuing..."
+        break
     fi
 done
 
-if [ "$airdrop_success" = true ]; then
-    echo "Airdrop successful!"
-else
-    echo "All airdrop attempts failed, but continuing anyway..."
-fi
+echo "Final wallet balance: $(solana balance "$WALLET_ADDRESS")"
 
 # Also create anchor wallet directory and copy the keypair
 mkdir -p /workspace/.anchor/wallet
 cp /root/.config/solana/id.json /workspace/.anchor/wallet/wallet.json
-
-# Check balance
-echo "Checking wallet balance:"
-solana balance
 
 echo "Wallet setup complete."
