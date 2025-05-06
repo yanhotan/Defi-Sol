@@ -9,6 +9,12 @@ services:
     volumes:
       - ./target/deploy:/app/deploy
       - ./test-ledger:/test-ledger
+    deploy:
+      resources:
+        limits:
+          memory: 8G
+        reservations:
+          memory: 4G
     command: >
       bash -c "
         apt-get update && apt-get install -y curl netcat &&
@@ -22,19 +28,22 @@ services:
           --reset
           --slots-per-epoch 32
           --ticks-per-slot 8
-          --clock-speed-multiplier 10
-          --rpc-send-batch-size 1
-          --rpc-threads 16
-          --dynamic-port-range 8000-8020
-          --no-bpf-jit
-          --log /test-ledger/validator.log
+          --account-paths /test-ledger/accounts
+          --bpf-program-chunking-size 65536
+          --deactivate-feature-stop-sibling-instruction-search
+          --compute-unit-limit 1400000
+          --log-messages-bytes-limit 65536
+          --heap-size 256000000
+          --enable-cpi-and-log-storage
+          --skip-startup-ledger-verification
           --quiet"
     environment:
       - RUST_LOG=solana_runtime::system_instruction_processor=trace,solana_runtime::message_processor=debug,solana_bpf_loader=debug,solana_rbpf=debug
+      - RUST_BACKTRACE=1
     networks:
       - solana-network
     healthcheck:
-      test: ["CMD", "bash", "-c", "curl -s http://localhost:8899 -X POST -H 'Content-Type: application/json' -d '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"getHealth\"}' | grep -q 'ok'"]
+      test: ["CMD", "curl", "-s", "http://localhost:8899", "-X", "POST", "-H", "Content-Type: application/json", "-d", '{"jsonrpc":"2.0","id":1,"method":"getHealth"}']
       interval: 10s
       timeout: 10s
       retries: 30
