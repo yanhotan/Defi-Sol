@@ -21,8 +21,16 @@ services:
           --rpc-bind-address 0.0.0.0
           --reset
           --slots-per-epoch 32
-          --tick-per-slot 8
+          --ticks-per-slot 8
+          --clock-speed-multiplier 10
+          --rpc-send-batch-size 1
+          --rpc-threads 16
+          --dynamic-port-range 8000-8020
+          --no-bpf-jit
+          --log /test-ledger/validator.log
           --quiet"
+    environment:
+      - RUST_LOG=solana_runtime::system_instruction_processor=trace,solana_runtime::message_processor=debug,solana_bpf_loader=debug,solana_rbpf=debug
     networks:
       - solana-network
     healthcheck:

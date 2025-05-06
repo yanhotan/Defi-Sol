@@ -67,11 +67,11 @@ setup_wallet() {
   echo -e "Test wallet address: ${GREEN}$WALLET_ADDRESS${NC}"
   
   # Request airdrop with retry logic
-  echo "Requesting airdrop of 10 SOL"
+  echo "Requesting airdrop of 15 SOL"
   airdrop_success=false
   for i in {1..5}; do
     echo "Airdrop attempt $i..."
-    if solana airdrop 10 "$WALLET_ADDRESS"; then
+    if solana airdrop 15 "$WALLET_ADDRESS"; then
       airdrop_success=true
       break
     else
@@ -175,7 +175,7 @@ verify_programs() {
   chmod -R 777 /workspace/programs/target
 }
 
-# Function to deploy programs to the validator with compatible flags
+# Function to deploy programs to the validator with improved stability handling
 deploy_programs() {
   step "Deploying Programs to Validator"
   
@@ -189,9 +189,24 @@ deploy_programs() {
   
   echo "Found program files: $PROGRAM_FILES"
   
-  # First, ensure the validator has enough slots/time
-  echo "Waiting for validator to process a few more blocks before deployment..."
-  sleep 15
+  # Configure Solana for deployment with longer timeout
+  solana config set --url http://solana-validator:8899
+  solana config set --commitment finalized
+  
+  # Wait for validator to be fully ready
+  echo "Waiting for validator to be fully ready..."
+  for i in {1..30}; do
+    if solana slot > /dev/null 2>&1; then
+      current_slot=$(solana slot)
+      echo "Current slot: $current_slot"
+      if [ "$current_slot" -gt 32 ]; then
+        echo "Validator has processed enough slots, proceeding with deployment"
+        break
+      fi
+    fi
+    echo "Waiting for validator to process more slots... (attempt $i/30)"
+    sleep 10
+  done
   
   for program in $PROGRAM_FILES; do
     program_name=$(basename $program .so)
@@ -204,43 +219,57 @@ deploy_programs() {
     
     echo "Deploying $program_name..."
     
-    # Try multiple deployment strategies with increasing aggressiveness
-    deploy_success=false
-    
-    # Strategy 1: Standard deploy with commitment
-    echo "Trying standard deploy..."
-    if solana program deploy "$program" --program-id "$keypair_file" --commitment confirmed; then
-      deploy_success=true
-      echo -e "${GREEN}✓ Program $program_name deployed successfully!${NC}"
-      continue
-    fi
-    
-    # Strategy 2: Deploy with force flag
-    echo "Trying deploy with force flag..."
-    if solana program deploy "$program" --program-id "$keypair_file" --commitment confirmed --force; then
-      deploy_success=true
-      echo -e "${GREEN}✓ Program $program_name deployed successfully with force!${NC}"
-      continue
-    fi
-    
-    # Strategy 3: Manual retry approach
-    echo "Trying manual retry approach..."
-    deploy_success=false
+    # Create a new buffer account with retries
+    buffer_created=false
     for attempt in {1..5}; do
-      echo "Attempt $attempt of 5..."
-      if solana program deploy "$program" --program-id "$keypair_file"; then
-        deploy_success=true
-        echo -e "${GREEN}✓ Program $program_name deployed successfully on attempt $attempt!${NC}"
+      echo "Creating program buffer (attempt $attempt/5)..."
+      if buffer_output=$(solana program write-buffer "$program" 2>&1); then
+        buffer_created=true
+        buffer_address=$(echo "$buffer_output" | grep -o '[1-9A-HJ-NP-Za-km-z]\{32,44\}' | head -1)
+        echo "Successfully created buffer at: $buffer_address"
         break
       else
-        echo "Deployment failed on attempt $attempt. Waiting before retry..."
-        sleep 10
+        echo "Buffer creation failed, waiting before retry..."
+        sleep 20
       fi
     done
     
-    if ! $deploy_success; then
-      echo -e "${YELLOW}All deployment attempts failed for $program_name but continuing...${NC}"
+    if [ "$buffer_created" = true ] && [ -n "$buffer_address" ]; then
+      # Deploy from buffer with retries
+      deploy_success=false
+      for attempt in {1..5}; do
+        echo "Deploying from buffer (attempt $attempt/5)..."
+        if solana program deploy --buffer "$buffer_address" --program-id "$keypair_file"; then
+          deploy_success=true
+          echo -e "${GREEN}✓ Program $program_name deployed successfully!${NC}"
+          # Verify the deployment
+          if solana program show "$program_name" > /dev/null 2>&1; then
+            echo "Deployment verified!"
+          fi
+          break
+        else
+          echo "Deployment failed, waiting before retry..."
+          sleep 20
+        fi
+      done
+      
+      if ! $deploy_success; then
+        echo -e "${RED}Failed to deploy $program_name from buffer${NC}"
+      fi
+    else
+      echo -e "${RED}Failed to create buffer for $program_name${NC}"
+      # Fallback to direct deployment
+      echo "Attempting direct deployment..."
+      if solana program deploy "$program" --program-id "$keypair_file"; then
+        echo -e "${GREEN}✓ Program $program_name deployed successfully via direct deployment!${NC}"
+      else
+        echo -e "${RED}All deployment attempts failed for $program_name${NC}"
+      fi
     fi
+    
+    # Wait between program deployments
+    echo "Waiting for validator to process deployment..."
+    sleep 30
   done
 }
 
