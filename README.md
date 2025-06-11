@@ -11,13 +11,32 @@ A comprehensive decentralized finance platform built on the Solana blockchain fe
 ---
 
 ## 📂 Repository Structure
+```
 SolFI/
-├── frontend/ # Next.js frontend application
-├── solana-vault-protocol/ # Solana programs and smart contracts
-├── deploy-devnet.bat # Deployment script for Solana devnet
-├── setup-solana.bat # Solana environment setup script
-└── setup-wallet-devnet.bat # Wallet configuration script for devnet
-
+├── frontend/                       # Next.js frontend application
+├── solana-vault-protocol/          # Solana programs and smart contracts
+│   ├── programs/                   # Core Solana programs written in Rust
+│   │   ├── locking-vault/          # Time-locked staking functionality
+│   │   ├── stablecoin-vault/       # Stablecoin deposit and yield generation
+│   │   ├── vault-sol/              # Native SOL staking solution
+│   │   └── dual-product/           # Dual-asset products and strategies
+│   ├── smart-contracts/            # Additional contract implementations
+│   ├── tests/                      # Integration and unit tests
+│   │   ├── locking-vault.ts        # Tests for locking vault
+│   │   ├── stablecoin-vault.ts     # Tests for stablecoin vault
+│   │   ├── vault-sol.ts            # Tests for SOL vault
+│   │   └── dual-product.ts         # Tests for dual product
+│   ├── target/                     # Compiled program binaries
+│   │   └── deploy/                 # Deployment-ready program binaries
+│   ├── Anchor.toml                 # Anchor configuration
+│   ├── docker-compose.yml          # Docker configuration for local development
+│   ├── Dockerfile                  # Docker build configuration
+│   ├── run-full-tests.sh           # Script for running all tests
+│   └── update-program-ids.sh       # Script for updating program IDs
+├── deploy-devnet.bat              # Deployment script for Solana devnet
+├── setup-solana.bat               # Solana environment setup script
+└── setup-wallet-devnet.bat        # Wallet configuration script for devnet
+```
 
 ---
 
