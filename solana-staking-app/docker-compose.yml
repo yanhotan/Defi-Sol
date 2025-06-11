@@ -20,26 +20,35 @@ services:
         apt-get update && apt-get install -y curl netcat &&
         echo 'Starting validator...' &&
         mkdir -p /test-ledger &&
-        solana-test-validator 
+        solana-test-validator
           --ledger /test-ledger
           --bind-address 0.0.0.0
           --rpc-port 8899
           --rpc-bind-address 0.0.0.0
           --reset
           --slots-per-epoch 32
-          --ticks-per-slot 8
+          --ticks-per-slot 4
           --account-paths /test-ledger/accounts
-          --bpf-program-chunking-size 65536
+          --bpf-program-chunking-size 262144
           --deactivate-feature-stop-sibling-instruction-search
           --compute-unit-limit 1400000
-          --log-messages-bytes-limit 65536
-          --heap-size 256000000
+          --poll-for-new-blockhash
+          --log-messages-bytes-limit 262144
+          --heap-size 1024000000
           --enable-cpi-and-log-storage
           --skip-startup-ledger-verification
+          --commitment processed
+          --rpc-timeout 180
+          --rpc-threads 32
+          --no-wait-for-vote-to-start-leader
+          --faucet-sol 100
+          --faucet-port 9900
           --quiet"
     environment:
       - RUST_LOG=solana_runtime::system_instruction_processor=trace,solana_runtime::message_processor=debug,solana_bpf_loader=debug,solana_rbpf=debug
       - RUST_BACKTRACE=1
+      - SOLANA_PRELOAD_TRANSACTION_ACCOUNTS=1
+      - SOLANA_COMMITMENT_CONFIG=processed
     networks:
       - solana-network
     healthcheck:
