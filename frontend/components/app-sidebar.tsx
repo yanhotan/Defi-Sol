@@ -4,6 +4,7 @@ import { LayoutDashboard, BarChart3, User, Settings, LogOut, Sun, Moon, Bot, Pac
 import { useTheme } from "next-themes"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import Image from "next/image"
 
 import {
   Sidebar,
@@ -73,7 +74,12 @@ export function AppSidebar() {
     <Sidebar>
       <SidebarHeader className="flex items-center px-4 py-2">
         <Link href="/" className="flex items-center gap-2">
-          <SolanaLogo size="md" />
+          <Image 
+            src="/solana_logo.png" 
+            alt="Solana Logo" 
+            width={32} 
+            height={32} 
+          />
           <span className="text-lg font-bold text-solana-gradient">Solana Staking</span>
         </Link>
       </SidebarHeader>
