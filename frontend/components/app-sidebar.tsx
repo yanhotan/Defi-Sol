@@ -77,8 +77,8 @@ export function AppSidebar() {
           <Image 
             src="/solana_logo.png" 
             alt="Solana Logo" 
-            width={32} 
-            height={32} 
+            width={28} 
+            height={28} 
           />
           <span className="text-lg font-bold text-solana-gradient">Solana Staking</span>
         </Link>
